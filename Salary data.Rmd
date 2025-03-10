@@ -1,12 +1,14 @@
 ---
 title: "Determinants of U S College Teacher Salaries"
-output: pdf_document
-  
+output:
+  html_document:
+    df_print: paged
 ---
 
-# Packages used
+Packages used
 
 ```{r}
+
 
 library(tidyverse)
 library(ggridges)
@@ -29,7 +31,7 @@ library(dplyr)
 ```
 
 
-# 1 - Cargar los datos. Realizar una inspección por variables de la 
+1 - Cargar los datos. Realizar una inspección por variables de la 
 distribución de salarios en función de cada atributo visualmente. 
 Realizar las observaciones pertinentes. ¿Qué variables son mejores para 
 separar los datos?
@@ -112,7 +114,8 @@ model.matrix(~0+., data=df[, -1]) %>%
   ggcorrplot(show.diag=FALSE, type="lower", lab=TRUE, lab_size=2)
 
 ```
-# The variable "years since obtaining a PhD" is correlated with both 
+ 
+The variable "years since obtaining a PhD" is correlated with both 
 "years of experience" and "professor ranking." Therefore, I choose
 to remove it from the dataset before performing the linear model. 
 Since the variable "years of service" is right-skewed, I choose 
@@ -128,7 +131,7 @@ to transform it using log + 1. Also, I transformed the variable salary to log.
 
 
 
-# 2 - ¿Se puede emplear un test paramétrico para determinar si las medias de
+2 - ¿Se puede emplear un test paramétrico para determinar si las medias de
 salarios entre hombres y mujeres son las mismas o difieren? Hay que tener que, 
 en tanto que se pide usar un test paramétrico, se deberá determinar si las 
 muestras cumplen con las hipótesis necesarias.
@@ -152,12 +155,13 @@ shapiro.test(men$salary)
 
 
 ```
-# The salary data for female professors follows a normal distribution, but the 
+ 
+The salary data for female professors follows a normal distribution, but the 
 data for male professors does not. Nevertheless, since the sample is large, a 
 parametric test can be conducted based on the central limit theorem.
 
 
-# 3 - Dividir el dataset tomando las primeras 317 instancias como train y las
+3 - Dividir el dataset tomando las primeras 317 instancias como train y las
 últimas 80 como test. Entrenar un modelo de regresión lineal con regularización
 Ridge y Lasso en train seleccionando el que mejor MSE tenga. Dar las métricas
 en test. Valorar el uso del one hot encoder, y, en caso de emplearlo,
@@ -250,13 +254,13 @@ mean((lasso_pred - y_test)^2)
 
 
 ```
-# The MSE values for both models are very small. Certainly, the prior data
+The MSE values for both models are very small. Certainly, the prior data
 preprocessing may have contributed to both models achieving similar performance.
 
 
 
 
-# 4 - Estudiar la normalidad de los residuos del modelo resultante. 
+4 - Estudiar la normalidad de los residuos del modelo resultante. 
 ¿Se detecta algún sesgo?
 
 ```{r}
@@ -270,7 +274,7 @@ plotres(ridge_mod)
 plotres(lasso_mod)
 
 ```
-# Both models exhibit a good distribution of residuals, although there are some
+Both models exhibit a good distribution of residuals, although there are some
 outliers present.However, I do not have enough knowledge about the dataset to 
 suggest that the outliers present indicate measurement errors. Therefore, I
 choose not to remove them from the dataset.It is possible 
