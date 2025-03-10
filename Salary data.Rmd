@@ -1,0 +1,334 @@
+---
+title: "Determinants of U S College Teacher Salaries"
+output: pdf_document
+  
+---
+
+# Packages used
+
+```{r}
+
+library(tidyverse)
+library(ggridges)
+library(ggthemes)
+library(tidyverse)
+library(ggpubr)
+library(glmnet)
+library(caret)
+library(lmtest)
+library(rmarkdown)
+library(knitr)
+library(tinytex)
+library(ggcorrplot)
+library(plotmo) 
+library(MASS)
+library(ggfortify)
+library(cowplot)
+library(SemiPar)
+library(dplyr)
+```
+
+
+# 1 - Cargar los datos. Realizar una inspección por variables de la 
+distribución de salarios en función de cada atributo visualmente. 
+Realizar las observaciones pertinentes. ¿Qué variables son mejores para 
+separar los datos?
+
+
+
+```{r}
+
+df <- read.csv("Salaries.csv", header = T, sep = ",")
+
+# My first curiosity was to examine the distribution of the variables 
+#"years of experience" and "years since obtaining a PhD" because I wanted 
+#to check for the presence of outliers.
+
+# Chart 1
+
+ggplot(df, aes(yrs.since.phd, fill = sex)) +
+  geom_histogram(binwidth = 1) + 
+  labs(
+    
+    title = "Distribution of the variable years since completion of the PhD according to gender",
+    x = "Years since completion of the PhD",
+    y = "Frequency"
+  )
+
+# Chart 2
+
+ggplot(df, aes(yrs.service, fill = sex)) +
+  geom_histogram(binwidth = 1) + 
+  labs(
+    
+    title = "Distribution of the variable years of experience according to gender",
+    x = "Years of experience",
+    y = "Frequency"
+  )
+
+# Chart 3 
+
+ggplot(df, aes(x = discipline, y = salary)) +
+  geom_boxplot() + 
+  geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(
+    
+    x = "Discipline",
+    y = "Salary"
+  )
+
+# Chart 4
+
+ggplot(df, aes(x = rank, y = salary)) +
+  geom_boxplot() + 
+  geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(
+    
+    x = "Rank",
+    y = "Salary"
+  )
+
+
+
+# Then, I examined the distribution of the salary variable to determine whether
+#I should apply a transformation before performing the regression analysis.
+
+bw <- (max(df$salary) - min(df$salary)) / 30  
+
+ggplot(df, aes(x = salary)) + 
+  
+  geom_histogram(aes(y = ..density..), colour = "black", binwidth = bw, fill = "lightblue") + 
+  
+  stat_function(fun = function(x) dnorm(x, mean = mean(df$salary), sd = sd(df$salary)), 
+                color = "red", size = 1) +
+  
+  geom_vline(aes(xintercept = mean(df$salary)), color = "blue", linetype = "dashed", size = 1)
+
+
+# Correlation matrix
+
+model.matrix(~0+., data=df[, -1]) %>% 
+  cor(use="pairwise.complete.obs") %>% 
+  ggcorrplot(show.diag=FALSE, type="lower", lab=TRUE, lab_size=2)
+
+```
+# The variable "years since obtaining a PhD" is correlated with both 
+"years of experience" and "professor ranking." Therefore, I choose
+to remove it from the dataset before performing the linear model. 
+Since the variable "years of service" is right-skewed, I choose 
+to transform it using log + 1. Also, I transformed the variable salary to log.
+
+
+
+
+
+
+
+
+
+
+
+# 2 - ¿Se puede emplear un test paramétrico para determinar si las medias de
+salarios entre hombres y mujeres son las mismas o difieren? Hay que tener que, 
+en tanto que se pide usar un test paramétrico, se deberá determinar si las 
+muestras cumplen con las hipótesis necesarias.
+
+```{r}
+
+women <- filter(df, sex == "Female")
+men <- filter(df, sex == "Male")
+
+ggdensity(women$salary, 
+          main = "Density plot of women salary",
+          xlab = "Salary")
+
+ggdensity(men$salary, 
+          main = "Density plot of men salary",
+          xlab = "Salary")
+
+
+shapiro.test(women$salary)
+shapiro.test(men$salary)
+
+
+```
+# The salary data for female professors follows a normal distribution, but the 
+data for male professors does not. Nevertheless, since the sample is large, a 
+parametric test can be conducted based on the central limit theorem.
+
+
+# 3 - Dividir el dataset tomando las primeras 317 instancias como train y las
+últimas 80 como test. Entrenar un modelo de regresión lineal con regularización
+Ridge y Lasso en train seleccionando el que mejor MSE tenga. Dar las métricas
+en test. Valorar el uso del one hot encoder, y, en caso de emplearlo,
+argumentarlo.
+
+```{r}
+
+
+# Converting yrs.service to log + 1
+
+df <- read.csv("Salaries.csv")  
+
+sum(df$yrs.service == 0)  
+
+df <- df |> mutate(yrs.service = ifelse(yrs.service == 0, 0.1, yrs.service))
+
+df <- df |> mutate(yrs.service = log(yrs.service + 1))
+
+summary(df$yrs.service)
+
+professors <- df |> dplyr::select(-X, -yrs.since.phd)
+
+View(professors)
+
+x = model.matrix(salary~., professors)[,-1] 
+
+
+# Converting salary to log
+                                         
+y <- professors |>
+  dplyr::select(salary) |>
+  unlist() |>
+  as.numeric() |>
+  log()
+
+
+### Ridge model
+
+# Creating many lambda values
+grid = 10^seq(10, -2, length = 100)
+ridge_mod = glmnet(x, y, alpha = 0, lambda = grid)
+
+dim(coef(ridge_mod))
+
+ridge_mod$call
+
+plot(ridge_mod, xvar = "lambda") 
+
+# Splitting the samples
+
+train <- professors[1:317, ]
+
+test <- tail(professors, 80)
+
+x_train = model.matrix(salary~., train)[,-1]
+x_test = model.matrix(salary~., test)[,-1]
+
+y_train = y[1:317]
+y_test = tail(y, 80)
+
+
+# Choosing the best lambda value
+
+set.seed(1)
+cv.out = cv.glmnet(x_train, y_train, alpha = 0) 
+bestlambda = cv.out$lambda.min  
+bestlambda
+
+plot(cv.out)
+
+# Fitting the model using the best lambda value
+
+ridge_mod = glmnet(x_train, y_train, alpha=0, lambda = grid, thresh = 1e-12)
+ridge_pred = predict(ridge_mod, s = bestlambda, newx = x_test)
+mean((ridge_pred - y_test)^2)
+
+### Lasso model
+
+lasso_mod = glmnet(x_train, y_train, alpha = 1, lambda = grid) 
+
+plot(lasso_mod)    
+
+set.seed(1)
+cv.out = cv.glmnet(x_train, y_train, alpha = 1) 
+plot(cv.out) 
+bestlam = cv.out$lambda.min 
+lasso_pred = predict(lasso_mod, s = bestlam, newx = x_test) 
+mean((lasso_pred - y_test)^2) 
+
+
+
+```
+# The MSE values for both models are very small. Certainly, the prior data
+preprocessing may have contributed to both models achieving similar performance.
+
+
+
+
+# 4 - Estudiar la normalidad de los residuos del modelo resultante. 
+¿Se detecta algún sesgo?
+
+```{r}
+
+# Ridge model
+
+plotres(ridge_mod)
+
+# Lasso model
+
+plotres(lasso_mod)
+
+```
+# Both models exhibit a good distribution of residuals, although there are some
+outliers present.However, I do not have enough knowledge about the dataset to 
+suggest that the outliers present indicate measurement errors. Therefore, I
+choose not to remove them from the dataset.It is possible 
+that we have not captured the full variation in the actual salaries 
+of the professors.
+
+
+
+
+
+
+
+
+
+
+# 5 - ¿Qué conclusiones se extraen de este estudio y del modelo implementado? ¿Es correcto el rendimiento de este?
+
+
+
+```{r}
+
+ridge_coefs <- coef(ridge_mod, s = bestlambda)
+ridge_coefs  
+
+lasso_coefs <- coef(lasso_mod, s = bestlam)
+lasso_coefs  
+
+# R2 Ridge model
+
+sst <- sum((y_test - mean(y_test))^2)  
+sse <- sum((y_test - ridge_pred)^2)  
+r2_ridge <- 1 - (sse/sst)
+r2_ridge  
+
+
+# R2 Lasso model
+
+sst <- sum((y_test - mean(y_test))^2)  
+sse_lasso <- sum((y_test - lasso_pred)^2)  
+r2_lasso <- 1 - (sse_lasso / sst)  
+r2_lasso  
+
+
+
+```
+
+# Both models explain little of the variation in the salary variable. 
+The most important variables are the professor's rank and whether they teach 
+discipline B.
+
+
+
+
+
+
+
+
+
+
+
+
