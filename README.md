@@ -1,4 +1,4 @@
-Machine Learning Exercises
+##Machine Learning Exercises
 
 Este repositorio reúne una colección de notebooks en Python diseñados para practicar y aplicar conceptos de Machine Learning, utilizando tanto datos simulados como datos reales. El objetivo principal es consolidar habilidades de análisis, modelización y evaluación de modelos predictivos.
 
